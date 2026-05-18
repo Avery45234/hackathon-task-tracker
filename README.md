@@ -14,7 +14,7 @@ Small dashboard for hackathon teams to track tasks, owners, and status. The poin
 | Person 1 | `frontend/src/App.jsx`, `frontend/src/App.css` | App state, wires children together |
 | Person 2 | `frontend/src/components/AddTaskForm.jsx` | Form to add a task |
 | Person 3 (Avery) | `frontend/src/components/TaskList.jsx`, `frontend/src/components/TaskCard.jsx` | Render the task list |
-| Person 4 | `frontend/src/components/FilterBar.jsx`, `frontend/src/components/StatsBar.jsx`, CSS polish | Filters + stats |
+| Person 4 (Nolan) | `frontend/src/components/FilterBar.jsx`, `frontend/src/components/StatsBar.jsx`, CSS polish | Filters + stats |
 
 **Shared** (don't edit without team agreement):
 - `frontend/src/api.js` — frontend API client
