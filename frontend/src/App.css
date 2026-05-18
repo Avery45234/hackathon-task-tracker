@@ -1,0 +1,17 @@
+/* OWNER: Person 1 (base) + Person 4 (polish) */
+body {
+  font-family: system-ui, sans-serif;
+  margin: 0;
+  background: #f6f7f9;
+  color: #1a1a1a;
+}
+
+.app {
+  max-width: 720px;
+  margin: 2rem auto;
+  padding: 1rem;
+}
+
+h1 {
+  margin-top: 0;
+}
