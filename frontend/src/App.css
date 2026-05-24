@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 /* OWNER: Person 1 (base) + Person 4 (polish) */
 body {
   font-family: system-ui, sans-serif;

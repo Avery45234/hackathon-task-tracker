@@ -5,15 +5,18 @@ import AddTaskForm from './components/AddTaskForm.jsx'
 import TaskList from './components/TaskList.jsx'
 import FilterBar from './components/FilterBar.jsx'
 import StatsBar from './components/StatsBar.jsx'
+import LandingPage from './LandingPage.jsx'
 import { fetchTasks, createTask, updateTaskStatus } from './api.js'
 
 export default function App() {
+  const [landed, setLanded] = useState(false)
   const [tasks, setTasks] = useState([])
   const [filter, setFilter] = useState('all')
 
   useEffect(() => {
+    if (!landed) return
     fetchTasks().then(setTasks).catch(console.error)
-  }, [])
+  }, [landed])
 
   async function handleAdd(task) {
     const created = await createTask(task)
@@ -24,6 +27,8 @@ export default function App() {
     const updated = await updateTaskStatus(id, status)
     setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)))
   }
+
+  if (!landed) return <LandingPage onEnter={() => setLanded(true)} />
 
   const visible = filter === 'all' ? tasks : tasks.filter((t) => t.status === filter)
 
