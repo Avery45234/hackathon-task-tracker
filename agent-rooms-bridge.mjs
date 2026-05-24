@@ -140,14 +140,32 @@ async function applySnapshot(files) {
   }
 }
 
+// Track files the bridge writes itself so the watcher doesn't echo them back.
+const serverWriteWindowMs = 1500
+const recentlyWritten = new Map()
+function markServerWrite(rel) {
+  recentlyWritten.set(rel, Date.now() + serverWriteWindowMs)
+}
+function wasServerWrite(rel) {
+  const expiry = recentlyWritten.get(rel)
+  if (!expiry) return false
+  if (expiry < Date.now()) {
+    recentlyWritten.delete(rel)
+    return false
+  }
+  return true
+}
+
 async function writeFile(rel, content) {
   const abs = safePath(rel)
   await fs.mkdir(path.dirname(abs), { recursive: true })
+  markServerWrite(rel)
   await fs.writeFile(abs, content)
 }
 
 async function deleteFile(rel) {
   const abs = safePath(rel)
+  markServerWrite(rel)
   await fs.rm(abs, { force: true })
 }
 
@@ -192,6 +210,8 @@ async function runPrompt(requestId, prompt) {
         proc = spawn(runner.cmd, runner.args(prompt), {
           cwd: workspaceDir,
           stdio: ['ignore', 'pipe', 'pipe'],
+          shell: process.platform === 'win32',
+          windowsHide: true,
         })
       } catch (err) {
         return reject(err)
@@ -227,6 +247,8 @@ async function runPrompt(requestId, prompt) {
   for (const p of Object.keys(before)) {
     if (!(p in after)) fileChanges.push({ path: p, deleted: true })
   }
+  // The watcher would otherwise echo these writes back as localChanges.
+  for (const fc of fileChanges) markServerWrite(fc.path)
   const summary = stdout.trim() || '(no text output)'
   console.log(`bridge: < done (${fileChanges.length} file change${fileChanges.length === 1 ? '' : 's'})`)
   sendBridge({ type: 'result', requestId, summary, fileChanges })
@@ -236,7 +258,51 @@ function sendBridge(msg) {
   if (ws?.readyState === 1) ws.send(JSON.stringify(msg))
 }
 
+// File watcher: when the bridge user (or their editor / Claude Code in VS Code)
+// changes a file in the workspace dir, push it to the room.
+const pendingChanges = new Map()
+let watcherActive = false
+
+function startWatcher() {
+  if (watcherActive) return
+  watcherActive = true
+  try {
+    fs.watch(workspaceDir, { recursive: true }, (eventType, filename) => {
+      if (!filename) return
+      const rel = String(filename).replaceAll('\\', '/')
+      if (rel.startsWith('node_modules/') || rel.startsWith('.') || rel.includes('/.')) return
+      if (wasServerWrite(rel)) return
+      if (pendingChanges.has(rel)) clearTimeout(pendingChanges.get(rel))
+      pendingChanges.set(rel, setTimeout(() => {
+        pendingChanges.delete(rel)
+        flushChange(rel).catch((err) => console.error('bridge: watcher flush failed', err))
+      }, 250))
+    })
+    console.log('bridge: watching workspace for local edits (VS Code-friendly)')
+  } catch (err) {
+    console.error('bridge: file watcher unavailable —', err.message)
+  }
+}
+
+async function flushChange(rel) {
+  if (wasServerWrite(rel)) return
+  const abs = safePath(rel)
+  try {
+    const stat = await fs.stat(abs)
+    if (!stat.isFile()) return
+    const content = await fs.readFile(abs, 'utf8')
+    console.log(`bridge: ↑ ${rel} (${content.length} bytes)`)
+    sendBridge({ type: 'localChange', path: rel, content })
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      console.log(`bridge: ↑ ${rel} (deleted)`)
+      sendBridge({ type: 'localChange', path: rel, deleted: true })
+    }
+  }
+}
+
 connect()
+startWatcher()
 
 const shutdown = () => {
   if (reconnectTimer) clearTimeout(reconnectTimer)
